@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>YT Extractor</title>
+<style>
+:root{
+  --bg:#f6f6f4;--surface:#ffffff;--surface2:#f0efec;--text:#16161a;--muted:#6b6b73;
+  --line:#e2e1dd;--accent:#e5322d;--accent-ink:#fff;--ok:#1f8a4c;--err:#c0392b;
+  --radius:14px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0f0f11;--surface:#18181b;--surface2:#222226;--text:#ececef;--muted:#9a9aa3;
+  --line:#2c2c31;--accent:#ff4a3d;--ok:#3ecf7a;--err:#ff6b5e}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 16px 60px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.logo{width:40px;height:28px;border-radius:8px;background:var(--accent);display:grid;place-items:center;flex:none}
+.logo::after{content:"";border-left:11px solid #fff;border-top:7px solid transparent;border-bottom:7px solid transparent;margin-left:3px}
+h1{font-size:22px;margin:0;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted);font-size:13px}
+form.search{display:flex;gap:8px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);padding:8px}
+form.search input{flex:1;min-width:0;border:0;background:transparent;color:var(--text);font-size:16px;padding:10px 12px;outline:none}
+button,.btn{appearance:none;border:1px solid var(--line);background:var(--surface2);color:var(--text);
+  border-radius:10px;padding:9px 14px;font:inherit;font-size:14px;cursor:pointer;text-decoration:none;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+button:hover,.btn:hover{filter:brightness(.97)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;padding:10px 20px}
+button:disabled{opacity:.5;cursor:default}
+.status{margin:12px 2px 0;font-size:13px;color:var(--muted);min-height:20px}
+.status .ok{color:var(--ok)} .status .err{color:var(--err)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-top:16px}
+.top{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:760px){.top{grid-template-columns:1fr}}
+.thumb{position:relative;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:var(--surface2)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .res{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.7);color:#fff;font-size:12px;padding:2px 8px;border-radius:6px}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+h2{font-size:20px;line-height:1.3;margin:0 0 6px}
+.meta{color:var(--muted);font-size:14px}
+.label{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 8px;font-weight:600}
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.sec-head h3{margin:0;font-size:16px}
+.desc{white-space:pre-wrap;word-wrap:break-word;max-height:360px;overflow:auto;background:var(--surface2);
+  border-radius:10px;padding:14px;font-size:14px}
+.desc a{color:var(--accent)}
+.empty{color:var(--muted);font-size:14px;padding:14px;background:var(--surface2);border-radius:10px}
+.tracks{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:14px}
+.chip small{color:var(--muted)}
+.note{color:var(--muted);font-size:13px;margin:12px 0 0}
+.skel{background:linear-gradient(90deg,var(--surface2),var(--line),var(--surface2));background-size:200% 100%;
+  animation:sk 1.2s infinite;border-radius:8px}
+@keyframes sk{to{background-position:-200% 0}}
+details.settings{margin-top:22px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px}
+details.settings summary{cursor:pointer;font-weight:600;font-size:14px}
+.settings label{display:block;font-size:13px;color:var(--muted);margin:14px 0 6px}
+.settings input{width:100%;font-family:var(--mono);font-size:13px;background:var(--surface2);color:var(--text);
+  border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+.hidden{display:none!important}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);
+  padding:8px 16px;border-radius:999px;font-size:14px;opacity:0;transition:.2s;pointer-events:none}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"></div>
+    <div>
+      <h1>YT Extractor</h1>
+      <p>Название, превью 16:9, описание и субтитры YouTube-видео через официальный API</p>
+    </div>
+  </header>
+
+  <form class="search" id="form">
+    <input id="url" type="text" placeholder="Вставь ссылку: https://youtu.be/…" autocomplete="off" spellcheck="false">
+    <button class="primary" id="go" type="submit">Получить</button>
+  </form>
+  <div class="status" id="status"></div>
+
+  <div id="result" class="hidden">
+    <div class="card top">
+      <div>
+        <div class="thumb"><img id="thumb" alt="Превью"><span class="res" id="thumbRes"></span></div>
+        <div class="row">
+          <button id="dlThumb">⬇ Скачать превью 16:9</button>
+          <a class="btn" id="openThumb" target="_blank" rel="noopener">Открыть оригинал</a>
+        </div>
+      </div>
+      <div>
+        <p class="label">Название</p>
+        <h2 id="title"></h2>
+        <div class="meta" id="meta"></div>
+        <div class="row">
+          <button id="copyTitle">Скопировать название</button>
+          <a class="btn" id="openYt" target="_blank" rel="noopener">Открыть на YouTube ↗</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sec-head">
+        <h3>Описание</h3>
+        <div class="row" style="margin:0">
+          <button id="copyDesc">Копировать</button>
+          <button id="dlDesc">⬇ .txt</button>
+        </div>
+      </div>
+      <div id="desc"></div>
+    </div>
+
+    <div class="card">
+      <div class="sec-head"><h3>Субтитры</h3></div>
+      <div id="subs"></div>
+      <p class="note">Официальный API показывает только, на каких языках есть субтитры. Чтобы забрать текст: открой видео на YouTube → под описанием нажми «Показать текст видео» и скопируй его.</p>
+    </div>
+  </div>
+
+  <details class="settings">
+    <summary>⚙ Ключ API</summary>
+    <label for="sKey">YouTube Data API key</label>
+    <input id="sKey" type="text" placeholder="AIza…">
+    <div class="row">
+      <button id="sSave">Сохранить</button>
+      <button id="sReset">Вернуть ключ из файла</button>
+    </div>
+  </details>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const DEFAULT_KEY = '';
+
+/* ---------- settings ---------- */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : v; }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, v); }catch{} },
+  del(k){ try{ localStorage.removeItem(k); }catch{} }
+};
+let apiKey = store.get('ytx-key', '') || DEFAULT_KEY;
+$('#sKey').value = apiKey;
+$('#sSave').onclick = () => { apiKey = $('#sKey').value.trim() || DEFAULT_KEY; store.set('ytx-key', apiKey); toast('Сохранено'); };
+$('#sReset').onclick = () => { store.del('ytx-key'); apiKey = DEFAULT_KEY; $('#sKey').value = apiKey; toast('Ключ из файла'); };
+
+/* ---------- helpers ---------- */
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600); }
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function safeName(s){ return (s || 'video').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'video'; }
+function download(name, data, type='text/plain;charset=utf-8'){
+  const blob = data instanceof Blob ? data : new Blob([data], {type});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+async function copy(text){
+  try{ await navigator.clipboard.writeText(text); }
+  catch{ const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+  toast('Скопировано');
+}
+async function api(path){
+  const r = await fetch(`https://www.googleapis.com/youtube/v3/${path}&key=${encodeURIComponent(apiKey)}`);
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok || j.error){
+    const reason = j.error && j.error.errors && j.error.errors[0] && j.error.errors[0].reason;
+    if(reason === 'quotaExceeded') throw new Error('Суточный лимит API исчерпан, он обновится в полночь по тихоокеанскому времени');
+    if(reason === 'keyInvalid' || (r.status === 400 && /key/i.test((j.error && j.error.message) || ''))) throw new Error('Неверный ключ API');
+    if(r.status === 403) throw new Error('Доступ запрещён: проверь, что YouTube Data API v3 включён и ключ не ограничен по сайтам');
+    throw new Error((j.error && j.error.message) || 'HTTP ' + r.status);
+  }
+  return j;
+}
+const langName = (() => {
+  let dn = null; try{ dn = new Intl.DisplayNames(['ru'], {type:'language'}); }catch{}
+  return code => { try{ return dn ? dn.of(code) : code; }catch{ return code; } };
+})();
+
+function parseId(input){
+  input = input.trim();
+  if(/^[\w-]{11}$/.test(input)) return input;
+  try{
+    const u = new URL(input.startsWith('http') ? input : 'https://' + input);
+    const h = u.hostname.replace(/^www\.|^m\.|^music\./, '');
+    if(h === 'youtu.be') return u.pathname.slice(1, 12);
+    if(h.endsWith('youtube.com') || h.endsWith('youtube-nocookie.com')){
+      if(u.searchParams.get('v')) return u.searchParams.get('v').slice(0, 11);
+      const m = u.pathname.match(/\/(?:shorts|embed|live|v|e)\/([\w-]{11})/);
+      if(m) return m[1];
+    }
+  }catch{}
+  const m = input.match(/([\w-]{11})(?![\w-])/);
+  return m ? m[1] : null;
+}
+
+let state = null, runId = 0;
+
+/* ---------- thumbnail ---------- */
+function loadImg(src, cors){
+  return new Promise((res, rej) => { const i = new Image(); if(cors) i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
+}
+async function pickThumb(id){
+  const opts = [{n:'maxresdefault', crop:false}, {n:'sddefault', crop:true}, {n:'hqdefault', crop:true}, {n:'mqdefault', crop:false}];
+  for(const o of opts){
+    const url = `https://i.ytimg.com/vi/${id}/${o.n}.jpg`;
+    let img = null, cors = true;
+    try{ img = await loadImg(url, true); }
+    catch{ try{ img = await loadImg(url, false); cors = false; }catch{ continue; } }
+    if(img.naturalWidth <= 120) continue;
+    return {url, img, cors, crop:o.crop};
+  }
+  return null;
+}
+function thumbCanvas(t){
+  const w = t.img.naturalWidth, h = t.img.naturalHeight, ch = Math.round(w * 9 / 16);
+  const c = document.createElement('canvas'); c.width = w; c.height = Math.min(ch, h);
+  c.getContext('2d').drawImage(t.img, 0, Math.max(0, (h - ch) / 2), w, c.height, 0, 0, w, c.height);
+  return c;
+}
+$('#dlThumb').onclick = async () => {
+  const t = state && state.thumb; if(!t) return;
+  const name = safeName(state.title) + '_16x9.jpg';
+  try{
+    if(!t.crop){ const r = await fetch(t.url); if(!r.ok) throw 0; return download(name, await r.blob()); }
+    if(!t.cors) throw 0;
+    const blob = await new Promise((res, rej) => thumbCanvas(t).toBlob(b => b ? res(b) : rej(), 'image/jpeg', 0.95));
+    download(name, blob);
+  }catch{ window.open(t.url, '_blank'); toast('Открыл картинку — сохрани её через правый клик'); }
+};
+
+/* ---------- rendering ---------- */
+const setStatus = html => { $('#status').innerHTML = html; };
+const linkify = t => esc(t).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+function renderAll(){
+  $('#title').textContent = state.title || '—';
+  const p = [];
+  if(state.author) p.push(esc(state.author));
+  if(state.published){ const d = new Date(state.published); if(!isNaN(d)) p.push(d.toLocaleDateString('ru-RU', {day:'numeric', month:'long', year:'numeric'})); }
+  if(state.views != null) p.push(Number(state.views).toLocaleString('ru-RU') + ' просмотров');
+  $('#meta').innerHTML = p.join(' · ');
+
+  const d = $('#desc');
+  if(state.description == null) d.innerHTML = '<div class="empty">Описание получить не удалось.</div>';
+  else if(!state.description.trim()) d.innerHTML = '<div class="empty">У видео нет описания.</div>';
+  else d.innerHTML = `<div class="desc">${linkify(state.description)}</div>`;
+
+  const s = $('#subs');
+  if(state.tracksErr) s.innerHTML = `<div class="empty">Не удалось получить список субтитров: ${esc(state.tracksErr)}</div>`;
+  else if(!state.tracks.length) s.innerHTML = '<div class="empty">У этого видео нет субтитров.</div>';
+  else s.innerHTML = '<div class="tracks">' + state.tracks.map(t =>
+    `<span class="chip">${esc(langName(t.lang))}${t.auto ? ' <small>· авто</small>' : ''}${t.name ? ` <small>· ${esc(t.name)}</small>` : ''}</span>`).join('') + '</div>';
+}
+
+/* ---------- main ---------- */
+async function run(input){
+  const id = parseId(input);
+  if(!id){ setStatus('<span class="err">Не похоже на ссылку YouTube.</span>'); return; }
+  const my = ++runId;
+  state = {id, title:'', tracks:[]};
+  $('#result').classList.remove('hidden');
+  $('#openYt').href = `https://www.youtube.com/watch?v=${id}`;
+  $('#title').innerHTML = '<div class="skel" style="height:26px;width:80%"></div>'; $('#meta').textContent = '';
+  $('#desc').innerHTML = '<div class="skel" style="height:120px"></div>';
+  $('#subs').innerHTML = '<div class="skel" style="height:40px"></div>';
+  $('#thumb').removeAttribute('src'); $('#thumbRes').textContent = '';
+  $('#go').disabled = true; setStatus('Загружаю…');
+
+  pickThumb(id).then(t => {
+    if(my !== runId) return;
+    state.thumb = t;
+    if(!t){ $('#thumbRes').textContent = 'нет превью'; return; }
+    $('#thumb').src = t.url; $('#openThumb').href = t.url;
+    const w = t.img.naturalWidth; $('#thumbRes').textContent = `${w}×${Math.round(w * 9 / 16)}`;
+  });
+
+  try{
+    const j = await api(`videos?part=snippet,statistics&id=${id}`);
+    if(my !== runId) return;
+    const it = j.items && j.items[0];
+    if(!it) throw new Error('Видео не найдено, удалено или закрыто');
+    const sn = it.snippet;
+    Object.assign(state, {title:sn.title, author:sn.channelTitle, description:sn.description,
+      published:sn.publishedAt, views:it.statistics ? it.statistics.viewCount : null});
+    try{
+      const c = await api(`captions?part=snippet&videoId=${id}`);
+      state.tracks = (c.items||[]).map(i => ({lang:i.snippet.language, name:i.snippet.name, auto:i.snippet.trackKind === 'asr'}))
+        .sort((a, b) => (a.auto - b.auto) || a.lang.localeCompare(b.lang));
+    }catch(e){ state.tracksErr = e.message; }
+    if(my !== runId) return;
+    renderAll();
+    setStatus('<span class="ok">Готово.</span>');
+  }catch(e){
+    if(my !== runId) return;
+    $('#title').textContent = '—'; $('#desc').innerHTML = ''; $('#subs').innerHTML = '';
+    setStatus(`<span class="err">${esc(e.message)}</span>`);
+  }finally{
+    if(my === runId) $('#go').disabled = false;
+  }
+}
+
+/* ---------- events ---------- */
+$('#form').onsubmit = e => { e.preventDefault(); run($('#url').value); };
+$('#url').addEventListener('paste', () => setTimeout(() => { if(parseId($('#url').value)) run($('#url').value); }, 0));
+$('#copyTitle').onclick = () => state && state.title && copy(state.title);
+$('#copyDesc').onclick = () => state && state.description && copy(state.description);
+$('#dlDesc').onclick = () => state && state.description != null && download(safeName(state.title) + '_описание.txt', state.description);
+
+const q = new URLSearchParams(location.search).get('v');
+if(q){ $('#url').value = q; run(q); }
+})();
+</script>
+</body>
+</html>
